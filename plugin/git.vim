@@ -118,6 +118,7 @@ function! GitDiff(args)
         echo "No output from git command"
         return
     endif
+    let git_output = substitute(git_output, '\r\n','\n', 'g')
     if &fenc != &enc
 	let pos_diff = match(git_output, '\n@@')
 	let git_output_file = strpart(git_output, 0, pos_diff) 
@@ -156,6 +157,7 @@ function! GitVimDiff(args)
     if &encoding != &fenc
 	let git_output = iconv(git_output, &fenc, &encoding)
     endif
+    let git_output = substitute(git_output, '\r\n','\n', 'g')
     let fenc = &fenc
     call <SID>OpenGitBuffer(git_output)
     let g:git_command_edit = git_command_edit_save
@@ -277,6 +279,7 @@ function! GitCatFile(file)
     if &encoding != &fenc
 	let git_output = iconv(git_output, &fenc, &encoding)
     endif
+    let git_output = substitute(git_output, '\r\n','\n', 'g')
     call <SID>OpenGitBuffer(git_output)
 endfunction
 

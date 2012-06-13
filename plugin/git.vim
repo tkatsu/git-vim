@@ -51,6 +51,9 @@ endfunction
 function! s:GetRepositoryPath(fname)
     let git_dir = fnamemodify(<SID>GetGitDir(), ":p:h:h")
     let fpath = fnamemodify(a:fname, ":p")
+    if has('win32')
+        let fpath = substitute(fpath, '\', '/', 'g')
+    endif
     return strpart(fpath, strlen(git_dir)+1, strlen(fpath) - strlen(git_dir)-1)
 endfunction
 

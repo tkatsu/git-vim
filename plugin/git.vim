@@ -24,6 +24,8 @@ endif
 
 if !exists('g:git_no_map_default') || !g:git_no_map_default
     nnoremap <Leader>gd :GitDiff<Enter>
+    nnoremap <Leader>gvd :GitVimDiff<Enter>
+    nnoremap <Leader>gvD :GitVimDiff --cached<Enter>
     nnoremap <Leader>gD :GitDiff --cached<Enter>
     nnoremap <Leader>gs :GitStatus<Enter>
     nnoremap <Leader>gl :GitLog<Enter>
@@ -43,6 +45,13 @@ function! s:GetGitDir()
         endif
     endif
     return b:git_dir
+endfunction
+
+" Ensure b:git_dir exists.
+function! s:GetRepositoryPath(fname)
+    let git_dir = fnamemodify(<SID>GetGitDir(), ":p:h:h")
+    let fpath = fnamemodify(a:fname, ":p")
+    return strpart(fpath, strlen(git_dir)+1, strlen(fpath) - strlen(git_dir)-1)
 endfunction
 
 " Returns current git branch.
@@ -102,6 +111,26 @@ function! GitDiff(args)
 
     call <SID>OpenGitBuffer(git_output)
     setlocal filetype=git-diff
+endfunction
+
+" Show vimdiff.
+function! GitVimDiff(args)
+    let git_output = s:SystemGit('cat-file -p ' . a:args . ':' . s:GetRepositoryPath(s:Expand('%')))
+    echo 'cat-file -p ' . a:args . ':' . s:GetRepositoryPath(s:Expand('%'))
+    if !strlen(git_output)
+        echo "No output from git command"
+        return
+    endif
+    let filetype = &filetype
+
+    diffthis
+
+    let git_command_edit_save = g:git_command_edit
+    let g:git_command_edit = 'vnew'
+    call <SID>OpenGitBuffer(git_output)
+    let g:git_command_edit = git_command_edit_save
+    let &filetype = filetype
+    diffthis
 endfunction
 
 " Show Status.
@@ -358,6 +387,7 @@ endfunction
 
 command! -nargs=1 -complete=customlist,ListGitCommits GitCheckout call GitCheckout(<q-args>)
 command! -nargs=* -complete=customlist,ListGitCommits GitDiff     call GitDiff(<q-args>)
+command! -nargs=* -complete=customlist,ListGitCommits GitVimDiff     call GitVimDiff(<q-args>)
 command!          GitStatus           call GitStatus()
 command! -nargs=? GitAdd              call GitAdd(<q-args>)
 command! -nargs=* GitLog              call GitLog(<q-args>)

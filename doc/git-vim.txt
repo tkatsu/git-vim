@@ -37,6 +37,9 @@ Git-vim provides:
 :GitDiff <args>
     git-diff. Completes git commits.
 
+:GitVimDiff <args>
+    git-diff in vimdiff mode.
+
 :GitPull <args>
     git-pull.
 

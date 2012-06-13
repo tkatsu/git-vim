@@ -41,7 +41,7 @@ Git-vim provides:
     git-pull.
 
 :GitPullRebase
-    git-pull —rebase.
+    git-pull --rebase.
 
 :GitPush <args>
     git-push. Defaults to +git push origin <current-branch>+.
@@ -65,7 +65,7 @@ Git-vim provides:
     :GitDiff
 
 <Leader>gD
-    :GitDiff —cached
+    :GitDiff --cached
 
 <Leader>gs
     :GitStatus

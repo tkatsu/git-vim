@@ -91,6 +91,12 @@ function! ListGitCommits(arg_lead, cmd_line, cursor_pos)
         return []
     endif
 
+    let commitencoding = s:CommitEncoding()
+    let tenc = s:SetTenc()
+    if tenc != commitencoding
+	let commits = iconv(commits, commitencoding, tenc)
+    endif
+
     let commits = ['HEAD'] + ListGitBranches(a:arg_lead, a:cmd_line, a:cursor_pos) + commits
 
     if a:cmd_line =~ '^GitDiff'
@@ -108,9 +114,10 @@ endfunction
 function! GitDiff(args)
     let file = s:Expand('%')
     let encoding = &encoding
-    if &encoding != &termencoding
-	let file = iconv(file, &encoding, &termencoding)
-	let &encoding = &termencoding
+    let tenc = s:SetTenc()
+    if &encoding != tenc
+	let file = iconv(file, &encoding, tenc)
+	let &encoding = tenc
     endif
     let git_output = s:SystemGit('diff ' . a:args . ' -- ' . shellescape(file))
     let &encoding = encoding
@@ -118,13 +125,21 @@ function! GitDiff(args)
         echo "No output from git command"
         return
     endif
+
     let git_output = substitute(git_output, '\r\n','\n', 'g')
-    if &fenc != &enc
-	let pos_diff = match(git_output, '\n@@')
-	let git_output_file = strpart(git_output, 0, pos_diff) 
-	let git_output = iconv(strpart(git_output, pos_diff), &fenc, &enc)
-	let git_output = git_output_file . git_output
+
+    let pos_diff = match(git_output, '\n@@')
+    if tenc != 'utf-8'
+	let git_output_file = iconv(strpart(git_output, 0, pos_diff), 'utf-8', tenc)
+    else
+	let git_output_file = strpart(git_output, 0, pos_diff)
     endif
+    if &fenc != tenc
+	let git_output = iconv(strpart(git_output, pos_diff), &fenc, tenc)
+    else
+	let git_output = strpart(git_output, pos_diff)
+    endif
+    let git_output = git_output_file . git_output
 
     call <SID>OpenGitBuffer(git_output)
     setlocal filetype=git-diff
@@ -134,9 +149,10 @@ endfunction
 function! GitVimDiff(args)
     let file = s:Expand('%')
     let encoding = &encoding
-    if &encoding != &termencoding
-	let file = iconv(file, &encoding, &termencoding)
-	let &encoding = &termencoding
+    let tenc = s:SetTenc()
+    if &encoding != tenc
+	let file = iconv(file, &encoding, tenc)
+	let &encoding = tenc
     endif
     let git_output = s:SystemGit('cat-file -p ' . a:args . shellescape(':' . s:GetRepositoryPath(file)))
 
@@ -171,10 +187,15 @@ endfunction
 " Show Status.
 function! GitStatus()
     let git_output = s:SystemGit('status')
+    let tenc = s:SetTenc()
+    if tenc != 'utf-8'
+	let git_output = iconv(git_output, 'utf-8', tenc)
+    else
+    endif
     call <SID>OpenGitBuffer(git_output)
     setlocal filetype=git-status
     nnoremap <buffer> <Enter> :GitAdd <cfile><Enter>:call <SID>RefreshGitStatus()<Enter>
-    nnoremap <buffer> -       :silent !git reset HEAD -- =expand('<cfile>')<Enter><Enter>:call <SID>RefreshGitStatus()<Enter>
+    nnoremap <buffer> -       :silent call <SID>GitResetAdd('<cfile>')<Enter>:call <SID>RefreshGitStatus()<Enter>
 endfunction
 
 function! s:RefreshGitStatus()
@@ -187,11 +208,18 @@ endfunction
 function! GitLog(args)
     let file = s:Expand('%')
     let encoding = &encoding
-    if &encoding != &termencoding
-	let file = iconv(file, &encoding, &termencoding)
-	let &encoding = &termencoding
+    let tenc = s:SetTenc()
+    if &encoding != tenc
+	let file = iconv(file, &encoding, tenc)
+	let &encoding = tenc
     endif
+
     let git_output = s:SystemGit('log ' . a:args . ' -- ' . shellescape(file))
+    let commitencoding = s:CommitEncoding()
+    if tenc != commitencoding
+	let git_output = iconv(git_output, commitencoding, tenc)
+    endif
+
     let &encoding = encoding
     call <SID>OpenGitBuffer(git_output)
     setlocal filetype=git-log
@@ -201,9 +229,10 @@ endfunction
 function! GitAdd(expr)
     let file = s:Expand(strlen(a:expr) ? a:expr : '%')
     let encoding = &encoding
-    if &encoding != &termencoding
-	let file = iconv(file, &encoding, &termencoding)
-	let &encoding = &termencoding
+    let tenc = s:SetTenc()
+    if &encoding != tenc
+	let file = iconv(file, &encoding, tenc)
+	let &encoding = tenc
     endif
 
     call GitDoCommand('add ' . shellescape(file))
@@ -265,9 +294,10 @@ endfunction
 function! GitCatFile(file)
     let file = s:Expand(a:file)
     let encoding = &encoding
-    if &encoding != &termencoding
-	let file = iconv(file, &encoding, &termencoding)
-	let &encoding = &termencoding
+    let tenc = s:SetTenc()
+    if &encoding != tenc
+	let file = iconv(file, &encoding, tenc)
+	let &encoding = tenc
     endif
     let git_output = s:SystemGit('cat-file -p ' . shellescape(file))
     let &encoding = encoding
@@ -287,9 +317,10 @@ endfunction
 function! GitBlame(...)
     let file = s:Expand('%')
     let encoding = &encoding
-    if &encoding != &termencoding
-	let file = iconv(file, &encoding, &termencoding)
-	let &encoding = &termencoding
+    let tenc = s:SetTenc()
+    if &encoding != tenc
+	let file = iconv(file, &encoding, tenc)
+	let &encoding = tenc
     endif
     let git_output = s:SystemGit('blame -- ' . shellescape(file))
     let &encoding = encoding
@@ -448,6 +479,43 @@ function! s:Expand(expr)
     else
         return expand(a:expr)
     endif
+endfunction
+
+function! s:CommitEncoding()
+    let commitencoding = s:SystemGit('config --get i18n.commitencoding')
+    " remove linefeed
+    let commitencoding = substitute(commitencoding, '\n\+$', '', '')
+    if commitencoding == ''
+	let commitencoding = 'utf-8'
+    endif
+    return commitencoding
+endfunction
+
+function! s:SetTenc()
+    if &tenc == ''
+	if has('win32')
+	    let tenc = 'cp932'
+	else
+	    let tenc = 'utf-8'
+	endif
+    else
+	let tenc = &tenc
+    endif
+    return tenc
+endfunction
+
+" Reset Add file from index.
+function! s:GitResetAdd(expr)
+    let file = s:Expand(strlen(a:expr) ? a:expr : '%')
+    let encoding = &encoding
+    let tenc = s:SetTenc()
+    if &encoding != tenc
+	let file = iconv(file, &encoding, tenc)
+	let &encoding = tenc
+    endif
+
+    call GitDoCommand('reset HEAD ' . shellescape(file))
+    let &encoding = encoding
 endfunction
 
 command! -nargs=1 -complete=customlist,ListGitCommits GitCheckout call GitCheckout(<q-args>)

@@ -39,9 +39,19 @@ endif
 " Ensure b:git_dir exists.
 function! s:GetGitDir()
     if !exists('b:git_dir')
-        let b:git_dir = s:SystemGit('rev-parse --git-dir')
+        let git_dir = s:SystemGit('rev-parse --git-dir')
         if !v:shell_error
-            let b:git_dir = fnamemodify(split(b:git_dir, "\n")[0], ':p') . '/'
+            let git_dir = split(git_dir, "\n")[0]
+            if has('win32')
+                " If path format is unix style, convert to window's one.
+                " Because, the git in "Git For Windows SDK" returns it with
+                " unix style.
+                if git_dir =~ '^\/\a\/'
+                    let git_dir = substitute(git_dir, '^\/\(\a\)\/', '\1:\', '')
+                    let git_dir = substitute(git_dir, '/', '\', 'g')
+                endif
+            endif
+            let b:git_dir = fnamemodify(git_dir, ':p') . '/'
         endif
     endif
     return b:git_dir
